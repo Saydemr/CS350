@@ -45,10 +45,8 @@ int main()
     else if (short_list_size < 2)
     {
         for (int i = 0; i < 5; ++i)
-        {
             if (preferences[i] > threshold)
                 printf("\nEveryone prefers : %s\n", meals[i]);
-        }
     }
     else 
     {
@@ -98,5 +96,5 @@ int main()
 
     }
 
-    return 31;
+    return 3;
 }
