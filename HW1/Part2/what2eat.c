@@ -5,7 +5,7 @@
 int main()
 {
     int num_people;
-    printf("Insert the number of people on the table : \n");
+    printf("Insert the number of people on the table (int): \n");
     scanf("%d", &num_people);
 
     int preferences[5];
@@ -14,6 +14,8 @@ int main()
 
     char meals[5][10] = {"Kabab","Burger","Pasta","Lahmacun","Salad" };
 
+
+    printf("*** FIRST ROUND ***\n");
     for (int i = 0; i < num_people ; ++i)
     {
         printf("Dear guest #%d\n",(i+1));
@@ -50,6 +52,7 @@ int main()
     }
     else 
     {
+        printf("*** SECOND ROUND ***\n");
         char* short_listed_meals[short_list_size][10];
         int pointer = 0;
 
@@ -95,6 +98,5 @@ int main()
             printf("%d-%s : %d\n", (i+1), short_listed_meals[i], preferences_short_listed[i]);
 
     }
-
-    return 3;
+    return 4;
 }

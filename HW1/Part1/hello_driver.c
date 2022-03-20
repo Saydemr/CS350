@@ -1,6 +1,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 MODULE_LICENSE("DUAL BSD/GPL");
+MODULE_AUTHOR("ABDULLAH SAYDEMIR");
 
 static int hello_init(void)
 {
