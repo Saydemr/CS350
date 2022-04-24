@@ -25,13 +25,13 @@ struct meal Menu[4] = {
 int meal_counter = 0;
 int meal_ing_counter = 0;
 
-int ingredients_in_pot = 0;
-
+int apprentice_meal_counter = 0;
+int apprentice_ing_counter = 0;
 
 // Define all required mutexes here
 pthread_mutex_t glove_mutex[GLOVE_COUNT];
-pthread_mutex_t pot_mutex;
-pthread_mutex_t ingredient_mutex;
+pthread_mutex_t pot_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t ingredient_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void put_gloves(int apprentice_id) {
     printf("Apprentice %d is picking gloves \n", apprentice_id);
@@ -55,17 +55,18 @@ void pick_ingredient(int apprentice_id, int* meal_index, int* ing_index) {
     // Implement a control mechanism here using mutexes if needed
     pthread_mutex_lock(&ingredient_mutex);
 
-    *meal_index = meal_counter;
-    *ing_index = meal_ing_counter;
+    *meal_index = apprentice_meal_counter;
+    *ing_index = apprentice_ing_counter;
     printf("Apprentice %d has taken ingredient %s\n", apprentice_id, Menu[*meal_index].ingredients[*ing_index].name);
     
     // Possible Race condition here, take your precaution
-    
-    meal_ing_counter = meal_ing_counter + 1;
 
-    if (meal_ing_counter == REQUIRED_INGREDIENTS)
-        meal_counter = meal_counter + 1,
-        meal_ing_counter = 0;
+    apprentice_ing_counter = apprentice_ing_counter + 1;
+    if (apprentice_ing_counter == REQUIRED_INGREDIENTS)
+    {
+        apprentice_ing_counter = 0;
+        apprentice_meal_counter = apprentice_meal_counter + 1;
+    }
 
     pthread_mutex_unlock(&ingredient_mutex);
     remove_gloves(apprentice_id);
@@ -80,21 +81,15 @@ void prepare_ingredient(int apprentice_id, int meal_index, int ing_index) {
 
 void put_ingredient(int id, int meal_index, int ing_index) {
     while(1) {
-        if (ingredients_in_pot < POT_SIZE)
+        if (meal_ing_counter < POT_SIZE && meal_index == meal_counter)
         {
-            if (meal_index == meal_counter && meal_index < MEALS_TO_PREPARE)
-            {
-                printf("Apprentince %d is trying to put %s into pot\n", id, Menu[meal_index].ingredients[ing_index].name);
+            pthread_mutex_lock(&pot_mutex);
+            printf("Apprentince %d is trying to put %s into pot\n", id, Menu[meal_index].ingredients[ing_index].name);
+            meal_ing_counter = meal_ing_counter + 1;
+            printf("Apprentice %d has put %s into pot\n", id, Menu[meal_index].ingredients[ing_index].name);
+            pthread_mutex_unlock(&pot_mutex);
 
-                // Implement a control mechanism here using mutexes to prevent the second problem mentioned in HW file
-                pthread_mutex_lock(&pot_mutex);
-                ingredients_in_pot = ingredients_in_pot + 1;
-                printf("Apprentince %d has put %s into pot\n", id, Menu[meal_index].ingredients[ing_index].name);
-                pthread_mutex_unlock(&pot_mutex);
-        
-                // Do not forget to break the loop !
-                break;
-            }
+            break;
         }
     }
 }
@@ -109,10 +104,9 @@ void help_chef(int apprentice_id) {
 void *apprentice(int *apprentice_id) {
     printf("Im apprentice %d\n", *apprentice_id);
     while(1) {
-        if(meal_counter == MEALS_TO_PREPARE) 
-            break;
-        
         help_chef(*apprentice_id);
+        if(apprentice_meal_counter == MEALS_TO_PREPARE) 
+            break;
     }
     pthread_exit(NULL);
 }
@@ -123,7 +117,7 @@ void *chef() {
          *  to prevent the second problem mentioned in HW file.
          *  As for now, he just cooks without checking the pot.
          */
-        if (ingredients_in_pot == POT_SIZE)
+        if (meal_ing_counter == POT_SIZE)
         {
             pthread_mutex_lock(&pot_mutex);
             printf("Chef is preparing meal %s\n", Menu[meal_counter].name);

@@ -1,5 +1,4 @@
 CC=gcc
-DEPS=meal.h
 LDFLAGS=-pthread
 
 make: kitchen.c meal.h
