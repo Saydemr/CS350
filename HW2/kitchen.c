@@ -25,6 +25,8 @@ struct meal Menu[4] = {
 int meal_counter = 0;
 int meal_ing_counter = 0;
 
+int ingredients_in_pot = 0;
+
 
 // Define all required mutexes here
 pthread_mutex_t glove_mutex[GLOVE_COUNT];
@@ -42,8 +44,8 @@ void put_gloves(int apprentice_id) {
 
 void remove_gloves(int apprentice_id) {
     // Implement a mutex unlock mechanism for gloves here
-    p_thread_mutex_unlock(&glove_mutex[apprentice_id]);
-    p_thread_mutex_unlock(&glove_mutex[(apprentice_id + 1) % GLOVE_COUNT]);
+    pthread_mutex_unlock(&glove_mutex[apprentice_id]);
+    pthread_mutex_unlock(&glove_mutex[(apprentice_id + 1) % GLOVE_COUNT]);
     printf("Apprentice %d has removed gloves\n", apprentice_id);
 
 }
@@ -75,7 +77,6 @@ void prepare_ingredient(int apprentice_id, int meal_index, int ing_index) {
     printf("Apprentice %d is done preparing %s \n", apprentice_id, Menu[meal_index].ingredients[ing_index].name);
 }
 
-int ingredients_in_pot = 0;
 
 void put_ingredient(int id, int meal_index, int ing_index) {
     while(1) {
