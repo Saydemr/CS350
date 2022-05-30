@@ -32,7 +32,17 @@ int main(int argc , char *argv[])
 		return 1;
 	}
 	
-	puts("Connected\n");
+	if (recv(sock , server_reply , 2000 , 0) < 0)
+	{
+		puts("recv failed");
+		return 1;
+	}
+
+	if ( strcmp(server_reply, "SIG_TERM") == 0 )
+	{
+		puts("Server terminated");
+		return 0;
+	}
 	
 	//keep communicating with server
 	while(1)
@@ -51,6 +61,12 @@ int main(int argc , char *argv[])
 		if( recv(sock , server_reply , 2000 , 0) < 0)
 		{
 			puts("recv failed");
+			break;
+		}
+
+		if ( strcmp(server_reply, "SIG_TERM") == 0)
+		{
+			puts("Connection closed by server");
 			break;
 		}
 		

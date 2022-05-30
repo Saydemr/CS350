@@ -11,9 +11,19 @@
 #include<pthread.h> //for threading , link with lpthread
 #include <time.h>       /* time_t, struct tm, time, localtime */
 
+#define MAX_CLIENTS 3
+#define MAX_CONCURRENT 2
+#define MAX_CONNECTION_DURATION 10.0
+int client_count = 0;
+pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+int queued_connections = 0;
+pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 
 //the thread function
 void *connection_handler(void *);
+void *queue_handler(void *);
 
 int main(int argc , char *argv[])
 {
@@ -40,8 +50,8 @@ int main(int argc , char *argv[])
 		perror("bind failed. Error");
 		return 1;
 	}
-	puts("bind done");
-	
+	puts("bind() done.");
+
 	//Listen
 	listen(socket_desc , 3);
 	
@@ -49,29 +59,36 @@ int main(int argc , char *argv[])
 	puts("Waiting for incoming connections...");
 	c = sizeof(struct sockaddr_in);
 	
-	while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
+	while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)))
 	{
-		puts("Connection accepted");
-		
-		pthread_t sniffer_thread;
-		new_sock = malloc(1);
-		*new_sock = client_sock;
 
-		
-		if( pthread_create( &sniffer_thread , NULL ,  connection_handler , (void*) new_sock) < 0)
+		puts("Connection in triage");
+
+		if (client_count >= MAX_CLIENTS)	 
 		{
-			perror("could not create thread");
-			return 1;
+			puts("Maximum number of concurrent connections reached. Sending SIG_TERM to client");
+			write(client_sock, "SIG_TERM", 8);
+			close(client_sock);
 		}
-		
-		//Now join the thread , so that we dont terminate before the thread
-		//pthread_join( sniffer_thread , NULL);
-		puts("Handler assigned");
+		else
+		{
+			printf("Connection #%d accepted\n", client_count+1);
+			write(client_sock, "SIG_ACK", 8);
+			pthread_t sniffer_thread;
+			new_sock = malloc(1);
+			*new_sock = client_sock;
+
+			if(pthread_create( &sniffer_thread , NULL ,  connection_handler , (void*) new_sock) < 0)
+			{
+				perror("Could not create thread");
+				return 1;
+			}
+		}
 	}
 	
 	if (client_sock < 0)
 	{
-		perror("accept failed");
+		perror("Accept failed");
 		return 1;
 	}
 	
@@ -83,51 +100,63 @@ int main(int argc , char *argv[])
  * */
 void *connection_handler(void *socket_desc)
 {
+
+	pthread_mutex_lock(&client_mutex);
+	client_count++;
+	pthread_mutex_unlock(&client_mutex);
+
+	while(client_count > MAX_CONCURRENT)
+	{
+		sleep(1);
+	}
+
 	//Get the socket descriptor
 	int sock = *(int*)socket_desc;
 	int read_size;
 	char *message , client_message[2000];
 	
-	//Send some messages to the client
-	message = "Greetings! I am your connection handler\n";
-	write(sock , message , strlen(message));
-	
-	
-	message = "Connection will be closed after 10 seconds\n";
-	write(sock , message , strlen(message));
+	struct timespec start, finish;
+	double elapsed = 0.0;
+	clock_gettime(CLOCK_MONOTONIC, &start);
 
-	message = "Now type something and i shall repeat what you type \n";
-	write(sock , message , strlen(message));
-	
-	clock_t t = clock();
-	
-    double time_taken = 0.0; // in seconds
     
 	//Receive a message from client
-	while (time_taken < 10.0 && (read_size = recv(sock , client_message , 2000 , 0)) > 0)
+	while (elapsed < MAX_CONNECTION_DURATION && (read_size = recv(sock , client_message , 2000 , 0)) > 0)
 	{
+		clock_gettime(CLOCK_MONOTONIC, &finish);
+		elapsed = (finish.tv_sec - start.tv_sec);
+		elapsed += (finish.tv_nsec - start.tv_nsec) / 1000000000.0;
+		
 		//Send the message back to client
-		write(sock , client_message , strlen(client_message));
-		time_taken = ((double)(clock() - t))/CLOCKS_PER_SEC;
+		int client_message_size = sizeof(client_message) / sizeof(client_message[0]);
+		send(sock, client_message, client_message_size , 0);
+		memset(client_message, 0, 2000);
+
+		if(read_size == 0)
+		{
+			puts("Client disconnected");
+			fflush(stdout);
+			break;
+		}
+		else if(read_size == -1)
+		{
+			perror("recv failed");
+			break;
+		}
+		else if (elapsed > MAX_CONNECTION_DURATION)
+		{
+			puts("Connection timed out");
+			break;
+		}
 	}
 	
-	if(read_size == 0)
-	{
-		puts("Client disconnected");
-		fflush(stdout);
-	}
-	else if(read_size == -1)
-	{
-		perror("recv failed");
-	}
-	else if (time_taken > 10)
-	{
-		message = "Connection closed by server. TIMEOUT\n";
-		write(sock , message , strlen(message));
-	}
-		
+	write(sock, "SIG_TERM", 8);
+	pthread_mutex_lock(&client_mutex);
+	client_count--;
+	pthread_mutex_unlock(&client_mutex);
 	//Free the socket pointer
 	free(socket_desc);
+	pthread_exit(NULL);
 	
 	return 0;
 }
